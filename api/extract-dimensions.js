@@ -1,6 +1,5 @@
 
 import { buffer } from 'micro';
-import { readFileSync } from 'fs';
 import OpenAI from 'openai';
 
 export const config = {
@@ -31,8 +30,7 @@ export default async function handler(req, res) {
     const base64 = filePart?.split('base64,')[1]?.trim();
 
     if (!base64) {
-      console.error("❌ No image base64 found in uploaded form data");
-      return res.status(400).json({ success: false, error: 'Image base64 not found' });
+      return res.status(400).json({ success: false, error: 'Image base64 not found in upload' });
     }
 
     const response = await openai.chat.completions.create({
@@ -58,21 +56,16 @@ export default async function handler(req, res) {
     });
 
     const content = response.choices[0].message.content;
-    console.log("🧠 GPT-4 raw response:", content);
-
     const match = content.match(/\{[^}]+\}/);
-    if (!match) {
-      console.error("❌ No valid JSON object found in GPT response");
-      return res.status(500).json({ success: false, error: 'No JSON object found in GPT response', content });
+    const parsed = match ? JSON.parse(match[0]) : null;
+
+    if (!parsed) {
+      return res.status(500).json({ success: false, error: 'No valid JSON found in GPT output', content });
     }
 
-    const dataJson = JSON.parse(match[0]);
-    console.log("✅ Parsed dimensions:", dataJson);
-
-    res.status(200).json({ success: true, data: dataJson });
-
+    res.status(200).json({ success: true, data: parsed });
   } catch (err) {
-    console.error("💥 Unexpected error:", err);
+    console.error("GPT-4 error:", err);
     res.status(500).json({ success: false, error: err.message });
   }
 }
