@@ -1,10 +1,9 @@
 {
-  "name": "gpt4-drawing-backend-vercel-debug",
+  "name": "gpt4-edge-backend",
   "version": "1.0.0",
-  "private": true,
   "type": "module",
+  "private": true,
   "dependencies": {
-    "micro": "^9.3.4",
     "openai": "^4.0.0"
   }
 }
