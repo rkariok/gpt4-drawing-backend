@@ -1,0 +1,4 @@
+{
+  "version": 2,
+  "builds": [{ "src": "api/extract-dimensions.js", "use": "@vercel/node" }]
+}
