@@ -13,14 +13,13 @@ const openai = new OpenAI({
 });
 
 export default async function handler(req, res) {
-  // ✅ CORS Headers
+  // ✅ CORS headers
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "POST, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type, x-vercel-protection-bypass");
 
-  // ✅ Reply to OPTIONS preflight
   if (req.method === 'OPTIONS') {
-    return res.status(200).end();
+    return res.status(200).end(); // ✅ handle preflight
   }
 
   if (req.method !== 'POST') {
@@ -51,7 +50,7 @@ export default async function handler(req, res) {
             content: [
               {
                 type: 'text',
-                text: 'Extract the most likely width and depth dimensions in inches from this stone top or cabinet drawing. Return them as JSON like {"width": 56, "depth": 25}'
+                text: 'Extract width and depth in inches as JSON only. No explanation. Format: {"width":56,"depth":25}'
               },
               {
                 type: 'image_url',
@@ -66,17 +65,25 @@ export default async function handler(req, res) {
       });
 
       const content = response.choices[0].message.content;
-      const match = content.match(/\\{[^}]+\\}/);
-      const result = match ? JSON.parse(match[0]) : null;
+      let result = null;
 
-      if (!result) {
+      try {
+        result = JSON.parse(content);
+      } catch {
+        const match = content.match(/\{[^}]+\}/);
+        if (match) {
+          result = JSON.parse(match[0]);
+        }
+      }
+
+      if (!result || typeof result.width !== 'number' || typeof result.depth !== 'number') {
         return res.status(500).json({ success: false, error: 'No valid JSON found', content });
       }
 
       res.status(200).json({ success: true, data: result });
 
     } catch (error) {
-      console.error('GPT-4 error:', error);
+      console.error('GPT error:', error);
       res.status(500).json({ success: false, error: error.message });
     }
   });
