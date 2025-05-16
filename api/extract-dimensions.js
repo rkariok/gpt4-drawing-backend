@@ -1,5 +1,6 @@
 
-import { buffer } from 'micro';
+import { IncomingForm } from 'formidable';
+import fs from 'fs';
 import OpenAI from 'openai';
 
 export const config = {
@@ -17,55 +18,57 @@ export default async function handler(req, res) {
     return res.status(405).json({ error: 'Only POST requests allowed' });
   }
 
-  try {
-    const chunks = [];
-    for await (const chunk of req) {
-      chunks.push(chunk);
-    }
-    const data = Buffer.concat(chunks);
-    const boundary = req.headers['content-type'].split('boundary=')[1];
-    const parts = data.toString().split(`--${boundary}`);
+  const form = new IncomingForm({ keepExtensions: true });
 
-    const filePart = parts.find(p => p.includes('filename'));
-    const base64 = filePart?.split('base64,')[1]?.trim();
-
-    if (!base64) {
-      return res.status(400).json({ success: false, error: 'Image base64 not found in upload' });
+  form.parse(req, async (err, fields, files) => {
+    if (err) {
+      return res.status(500).json({ success: false, error: 'Failed to parse form' });
     }
 
-    const response = await openai.chat.completions.create({
-      model: 'gpt-4-vision-preview',
-      messages: [
-        {
-          role: 'user',
-          content: [
-            {
-              type: 'text',
-              text: 'Extract the most likely width and depth dimensions in inches from this stone top or cabinet drawing. Return them as JSON like {"width": 56, "depth": 25}'
-            },
-            {
-              type: 'image_url',
-              image_url: {
-                url: `data:image/png;base64,${base64}`,
+    try {
+      const file = files.image;
+      if (!file || !file[0]) {
+        return res.status(400).json({ success: false, error: 'No image file found in upload' });
+      }
+
+      const fileBuffer = fs.readFileSync(file[0].filepath);
+      const base64 = fileBuffer.toString('base64');
+
+      const response = await openai.chat.completions.create({
+        model: 'gpt-4-vision-preview',
+        messages: [
+          {
+            role: 'user',
+            content: [
+              {
+                type: 'text',
+                text: 'Extract the most likely width and depth dimensions in inches from this stone top or cabinet drawing. Return them as JSON like {"width": 56, "depth": 25}'
+              },
+              {
+                type: 'image_url',
+                image_url: {
+                  url: `data:image/png;base64,${base64}`,
+                }
               }
-            }
-          ]
-        }
-      ],
-      max_tokens: 1000
-    });
+            ]
+          }
+        ],
+        max_tokens: 1000
+      });
 
-    const content = response.choices[0].message.content;
-    const match = content.match(/\{[^}]+\}/);
-    const parsed = match ? JSON.parse(match[0]) : null;
+      const content = response.choices[0].message.content;
+      const match = content.match(/\{[^}]+\}/);
+      const result = match ? JSON.parse(match[0]) : null;
 
-    if (!parsed) {
-      return res.status(500).json({ success: false, error: 'No valid JSON found in GPT output', content });
+      if (!result) {
+        return res.status(500).json({ success: false, error: 'No valid JSON found', content });
+      }
+
+      res.status(200).json({ success: true, data: result });
+
+    } catch (error) {
+      console.error('GPT-4 error:', error);
+      res.status(500).json({ success: false, error: error.message });
     }
-
-    res.status(200).json({ success: true, data: parsed });
-  } catch (err) {
-    console.error("GPT-4 error:", err);
-    res.status(500).json({ success: false, error: err.message });
-  }
+  });
 }
