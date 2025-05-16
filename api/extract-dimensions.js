@@ -28,8 +28,12 @@ export default async function handler(req, res) {
     const parts = data.toString().split(`--${boundary}`);
 
     const filePart = parts.find(p => p.includes('filename'));
-    const base64 = filePart.split('base64,')[1].trim();
-    const imageData = base64;
+    const base64 = filePart?.split('base64,')[1]?.trim();
+
+    if (!base64) {
+      console.error("❌ No image base64 found in uploaded form data");
+      return res.status(400).json({ success: false, error: 'Image base64 not found' });
+    }
 
     const response = await openai.chat.completions.create({
       model: 'gpt-4-vision-preview',
@@ -44,7 +48,7 @@ export default async function handler(req, res) {
             {
               type: 'image_url',
               image_url: {
-                url: `data:image/png;base64,${imageData}`,
+                url: `data:image/png;base64,${base64}`,
               }
             }
           ]
@@ -53,12 +57,22 @@ export default async function handler(req, res) {
       max_tokens: 1000
     });
 
-    const match = response.choices[0].message.content.match(/\{[^}]+\}/);
-    const dataJson = match ? JSON.parse(match[0]) : {};
+    const content = response.choices[0].message.content;
+    console.log("🧠 GPT-4 raw response:", content);
+
+    const match = content.match(/\{[^}]+\}/);
+    if (!match) {
+      console.error("❌ No valid JSON object found in GPT response");
+      return res.status(500).json({ success: false, error: 'No JSON object found in GPT response', content });
+    }
+
+    const dataJson = JSON.parse(match[0]);
+    console.log("✅ Parsed dimensions:", dataJson);
+
     res.status(200).json({ success: true, data: dataJson });
 
   } catch (err) {
-    console.error(err);
+    console.error("💥 Unexpected error:", err);
     res.status(500).json({ success: false, error: err.message });
   }
 }
