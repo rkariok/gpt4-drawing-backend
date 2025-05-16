@@ -1,4 +1,3 @@
-
 import { IncomingForm } from 'formidable';
 import fs from 'fs';
 import OpenAI from 'openai';
@@ -35,7 +34,7 @@ export default async function handler(req, res) {
       const base64 = fileBuffer.toString('base64');
 
       const response = await openai.chat.completions.create({
-        model: 'gpt-4-vision-preview',
+        model: 'gpt-4o',
         messages: [
           {
             role: 'user',
